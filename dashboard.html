@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urban Farm Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            margin-bottom: 1rem;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e1e1e1;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .map-container {
+            grid-column: 1 / -1;
+            height: 400px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        .farms-list {
+            grid-column: 1 / -1;
+        }
+
+        .farm-item {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #667eea;
+        }
+
+        .farm-item h3 {
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .farm-item p {
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .farm-actions {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .message {
+            padding: 0.75rem;
+            border-radius: 5px;
+            margin-top: 1rem;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌱 Urban Farm Dashboard</h1>
+        <div class="user-info">
+            <span id="userName">Loading...</span>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="dashboard-grid">
+            <!-- Add Farm Form -->
+            <div class="card">
+                <h2>Add New Farm</h2>
+                <form id="farmForm">
+                    <div class="form-group">
+                        <label for="farmName">Farm Name</label>
+                        <input type="text" id="farmName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="farmDescription">Description</label>
+                        <textarea id="farmDescription" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="farmAddress">Address</label>
+                        <input type="text" id="farmAddress" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="farmLatitude">Latitude</label>
+                        <input type="number" step="any" id="farmLatitude" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="farmLongitude">Longitude</label>
+                        <input type="number" step="any" id="farmLongitude" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="farmSize">Size (acres)</label>
+                        <input type="number" step="0.1" id="farmSize" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="farmCropTypes">Crop Types (comma separated)</label>
+                        <input type="text" id="farmCropTypes" placeholder="tomatoes, lettuce, herbs">
+                    </div>
+                    <button type="submit" class="btn">Add Farm</button>
+                    <div id="farmFormMessage"></div>
+                </form>
+            </div>
+
+            <!-- Farm Statistics -->
+            <div class="card">
+                <h2>Farm Statistics</h2>
+                <div id="farmStats">
+                    <p><strong>Total Farms:</strong> <span id="totalFarms">0</span></p>
+                    <p><strong>Total Area:</strong> <span id="totalArea">0</span> acres</p>
+                    <p><strong>Most Common Crop:</strong> <span id="commonCrop">N/A</span></p>
+                </div>
+            </div>
+
+            <!-- Map Container -->
+            <div class="card map-container">
+                <div id="map"></div>
+            </div>
+
+            <!-- Farms List -->
+            <div class="card farms-list">
+                <h2>Registered Farms</h2>
+                <div id="farmsList">
+                    <div class="empty-state">Loading farms...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const API_BASE_URL = 'http://localhost:5000/api';
+        let authToken = localStorage.getItem('authToken');
+        let map, farms = [];
+
+        // Check authentication
+        if (!authToken) {
+            alert('Please login first');
+            window.location.href = 'index.html';
+        }
+
+        // Show message function
+        function showMessage(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="message ${isError ? 'error' : 'success'}">${message}</div>`;
+            setTimeout(() => {
+                element.innerHTML = '';
+            }, 5000);
+        }
+
+        // Load user profile
+        async function loadUserProfile() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const user = await response.json();
+                    document.getElementById('userName').textContent = `Welcome, ${user.name}`;
+                } else {
+                    logout();
+                }
+            } catch (error) {
+                console.error('Error loading profile:', error);
+                logout();
+            }
+        }
+
+        // Load and display farms
+        async function loadFarms() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/farms`);
+                const farmsData = await response.json();
+                
+                farms = farmsData;
+                displayFarmsOnMap();
+                displayFarmsList();
+                updateFarmStats();
+            } catch (error) {
+                console.error('Error loading farms:', error);
+                document.getElementById('farmsList').innerHTML = 
+                    '<div class="empty-state">Error loading farms. Please try again.</div>';
+            }
+        }
+
+        // Initialize Leaflet map
+        function initMap() {
+            map = L.map('map').setView([40.7128, -74.0060], 10);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Add click handler to get coordinates
+            map.on('click', function(e) {
+                document.getElementById('farmLatitude').value = e.latlng.lat.toFixed(6);
+                document.getElementById('farmLongitude').value = e.latlng.lng.toFixed(6);
+            });
+        }
+
+        // Display farms on map
+        function displayFarmsOnMap() {
+            // Clear existing markers
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            farms.forEach(farm => {
+                const marker = L.marker([farm.latitude, farm.longitude]).addTo(map);
+                marker.bindPopup(`
+                    <div>
+                        <h3>${farm.name}</h3>
+                        <p><strong>Description:</strong> ${farm.description}</p>
+                        <p><strong>Address:</strong> ${farm.address}</p>
+                        <p><strong>Size:</strong> ${farm.size} acres</p>
+                        <p><strong>Crops:</strong> ${farm.cropTypes.join(', ')}</p>
+                        <p><strong>Owner:</strong> ${farm.owner.name}</p>
+                    </div>
+                `);
+            });
+
+            // Fit map to show all farms
+            if (farms.length > 0) {
+                const group = new L.featureGroup(map._layers);
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+
+        // Display farms list
+        function displayFarmsList() {
+            const farmsList = document.getElementById('farmsList');
+            
+            if (farms.length === 0) {
+                farmsList.innerHTML = '<div class="empty-state">No farms registered yet. Add the first one!</div>';
+                return;
+            }
+
+            farmsList.innerHTML = farms.map(farm => `
+                <div class="farm-item">
+                    <h3>${farm.name}</h3>
+                    <p><strong>Description:</strong> ${farm.description}</p>
+                    <p><strong>Address:</strong> ${farm.address}</p>
+                    <p><strong>Coordinates:</strong> ${farm.latitude}, ${farm.longitude}</p>
+                    <p><strong>Size:</strong> ${farm.size} acres</p>
+                    <p><strong>Crops:</strong> ${farm.cropTypes.join(', ')}</p>
+                    <p><strong>Owner:</strong> ${farm.owner.name}</p>
+                    <p><strong>Created:</strong> ${new Date(farm.createdAt).toLocaleDateString()}</p>
+                    <div class="farm-actions">
+                        <button class="btn btn-small btn-danger" onclick="deleteFarm('${farm._id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Update farm statistics
+        function updateFarmStats() {
+            const totalFarms = farms.length;
+            const totalArea = farms.reduce((sum, farm) => sum + farm.size, 0).toFixed(1);
+            
+            // Find most common crop
+            const cropCounts = {};
+            farms.forEach(farm => {
+                farm.cropTypes.forEach(crop => {
+                    cropCounts[crop] = (cropCounts[crop] || 0) + 1;
+                });
+            });
+            
+            const commonCrop = Object.keys(cropCounts).length > 0 
+                ? Object.keys(cropCounts).reduce((a, b) => cropCounts[a] > cropCounts[b] ? a : b)
+                : 'N/A';
+
+            document.getElementById('totalFarms').textContent = totalFarms;
+            document.getElementById('totalArea').textContent = totalArea;
+            document.getElementById('commonCrop').textContent = commonCrop;
+        }
+
+        // Farm form submission
+        document.getElementById('farmForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const farmData = {
+                name: document.getElementById('farmName').value,
+                description: document.getElementById('farmDescription').value,
+                address: document.getElementById('farmAddress').value,
+                latitude: parseFloat(document.getElementById('farmLatitude').value),
+                longitude: parseFloat(document.getElementById('farmLongitude').value),
+                size: parseFloat(document.getElementById('farmSize').value),
+                cropTypes: document.getElementById('farmCropTypes').value
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0)
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/farms`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(farmData)
+                });
+
+                if (response.ok) {
+                    showMessage('farmFormMessage', 'Farm added successfully!', false);
+                    document.getElementById('farmForm').reset();
+                    loadFarms(); // Refresh the farms list
+                } else {
+                    const error = await response.json();
+                    showMessage('farmFormMessage', error.message || 'Failed to add farm', true);
+                }
+            } catch (error) {
+                console.error('Error adding farm:', error);
+                showMessage('farmFormMessage', 'Failed to add farm. Please check your connection.', true);
+            }
+        });
+
+        // Delete farm
+        async function deleteFarm(farmId) {
+            if (!confirm('Are you sure you want to delete this farm?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/farms/${farmId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    showMessage('farmFormMessage', 'Farm deleted successfully!', false);
+                    loadFarms(); // Refresh the farms list
+                } else {
+                    const error = await response.json();
+                    alert(error.message || 'Failed to delete farm');
+                }
+            } catch (error) {
+                console.error('Error deleting farm:', error);
+                alert('Failed to delete farm. Please check your connection.');
+            }
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('userData');
+            window.location.href = 'index.html';
+        }
+
+        // Initialize the app
+        window.onload = function() {
+            loadUserProfile();
+            loadFarms();
+            initMap();
+        };
+    </script>
+</body>
+</html>
